@@ -163,7 +163,7 @@ github.com/urfave/cli
 # github.com/vmware/govcloudair v0.0.2
 github.com/vmware/govcloudair
 github.com/vmware/govcloudair/types/v56
-# github.com/vmware/govmomi v0.21.0
+# github.com/vmware/govmomi v0.22.1
 github.com/vmware/govmomi
 github.com/vmware/govmomi/find
 github.com/vmware/govmomi/guest

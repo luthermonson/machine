@@ -9,6 +9,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/vmware/govmomi/vim25/debug"
+
 	"github.com/rancher/machine/libmachine/log"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/guest"
@@ -239,6 +241,10 @@ func (d *Driver) getCtx() context.Context {
 
 func (d *Driver) getSoapClient() (*govmomi.Client, error) {
 	if d.soap == nil {
+		if os.Getenv("MACHINE_DEBUG") != "" {
+			debug.SetProvider(&debug.LogProvider{})
+		}
+
 		c, err := d.soapLogin()
 		if err != nil {
 			return nil, err
