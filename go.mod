@@ -41,7 +41,7 @@ require (
 	github.com/tent/http-link-go v0.0.0-20130702225549-ac974c61c2f9 // indirect
 	github.com/urfave/cli v1.11.1-0.20151120215642-0302d3914d2a
 	github.com/vmware/govcloudair v0.0.2
-	github.com/vmware/govmomi v0.21.0
+	github.com/vmware/govmomi v0.23.2-0.20201015053813-cd11c0805183
 	golang.org/x/crypto v0.0.0-20200406173513-056763e48d71
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d

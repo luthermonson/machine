@@ -74,7 +74,8 @@ type Client struct {
 	Types     types.Func
 	UserAgent string
 
-	cookie string
+	cookie          string
+	insecureCookies bool
 }
 
 var schemeMatch = regexp.MustCompile(`^\w+://`)
@@ -156,7 +157,15 @@ func NewClient(u *url.URL, insecure bool) *Client {
 	c.u = c.URL()
 	c.u.User = nil
 
+	if c.u.Scheme == "http" {
+		c.insecureCookies = os.Getenv("GOVMOMI_INSECURE_COOKIES") == "true"
+	}
+
 	return &c
+}
+
+func (c *Client) DefaultTransport() *http.Transport {
+	return c.t
 }
 
 // NewServiceClient creates a NewClient with the given URL.Path and namespace.
@@ -173,7 +182,7 @@ func (c *Client) NewServiceClient(path string, namespace string) *Client {
 
 	client := NewClient(u, c.k)
 	client.Namespace = "urn:" + namespace
-	client.Transport.(*http.Transport).TLSClientConfig = c.Transport.(*http.Transport).TLSClientConfig
+	client.DefaultTransport().TLSClientConfig = c.DefaultTransport().TLSClientConfig
 	if cert := c.Certificate(); cert != nil {
 		client.SetCertificate(*cert)
 	}
@@ -472,6 +481,16 @@ func (c *Client) UnmarshalJSON(b []byte) error {
 
 type kindContext struct{}
 
+func (c *Client) setInsecureCookies(res *http.Response) {
+	cookies := res.Cookies()
+	if len(cookies) != 0 {
+		for _, cookie := range cookies {
+			cookie.Secure = false
+		}
+		c.Jar.SetCookies(c.u, cookies)
+	}
+}
+
 func (c *Client) Do(ctx context.Context, req *http.Request, f func(*http.Response) error) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -515,6 +534,10 @@ func (c *Client) Do(ctx context.Context, req *http.Request, f func(*http.Respons
 		d.debugResponse(res, ext)
 	}
 
+	if c.insecureCookies {
+		c.setInsecureCookies(res)
+	}
+
 	return f(res)
 }
 
@@ -530,6 +553,32 @@ type headerContext struct{}
 // WithHeader can be used to modify the outgoing request soap.Header fields.
 func (c *Client) WithHeader(ctx context.Context, header Header) context.Context {
 	return context.WithValue(ctx, headerContext{}, header)
+}
+
+type statusError struct {
+	res *http.Response
+}
+
+// Temporary returns true for HTTP response codes that can be retried
+// See vim25.TemporaryNetworkError
+func (e *statusError) Temporary() bool {
+	switch e.res.StatusCode {
+	case http.StatusBadGateway:
+		return true
+	}
+	return false
+}
+
+func (e *statusError) Error() string {
+	return e.res.Status
+}
+
+func newStatusError(res *http.Response) error {
+	return &url.Error{
+		Op:  res.Request.Method,
+		URL: res.Request.URL.Path,
+		Err: &statusError{res},
+	}
 }
 
 func (c *Client) RoundTrip(ctx context.Context, reqBody, resBody HasFault) error {
@@ -587,7 +636,7 @@ func (c *Client) RoundTrip(ctx context.Context, reqBody, resBody HasFault) error
 		case http.StatusInternalServerError:
 			// Error, but typically includes a body explaining the error
 		default:
-			return errors.New(res.Status)
+			return newStatusError(res)
 		}
 
 		dec := xml.NewDecoder(res.Body)
@@ -755,7 +804,7 @@ func (c *Client) Download(ctx context.Context, u *url.URL, param *Download) (io.
 	switch res.StatusCode {
 	case http.StatusOK:
 	default:
-		err = errors.New(res.Status)
+		err = fmt.Errorf("download(%s): %s", u, res.Status)
 	}
 
 	if err != nil {

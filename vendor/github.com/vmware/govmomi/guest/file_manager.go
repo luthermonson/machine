@@ -18,6 +18,7 @@ package guest
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/url"
 	"sync"
@@ -127,9 +128,7 @@ func (m FileManager) TransferURL(ctx context.Context, u string) (*url.URL, error
 		return nil, err
 	}
 
-	needsHostname := turl.Hostname() == "*"
-
-	if needsHostname {
+	if turl.Hostname() == "*" {
 		turl.Host = m.c.URL().Host // Also use Client's port, to support port forwarding
 	}
 
@@ -144,7 +143,7 @@ func (m FileManager) TransferURL(ctx context.Context, u string) (*url.URL, error
 	mname, ok := m.hosts[name]
 	m.mu.Unlock()
 
-	if ok && needsHostname {
+	if ok {
 		turl.Host = net.JoinHostPort(mname, port)
 		return turl, nil
 	}
@@ -152,16 +151,21 @@ func (m FileManager) TransferURL(ctx context.Context, u string) (*url.URL, error
 	c := property.DefaultCollector(m.c)
 
 	var vm mo.VirtualMachine
-	err = c.RetrieveOne(ctx, m.vm, []string{"runtime.host"}, &vm)
+	err = c.RetrieveOne(ctx, m.vm, []string{"name", "runtime.host"}, &vm)
 	if err != nil {
 		return nil, err
 	}
 
 	if vm.Runtime.Host == nil {
-		return turl, nil // won't matter if the VM was powered off since the call to InitiateFileTransfer
+		return turl, nil // won't matter if the VM was powered off since the call to InitiateFileTransfer will fail
 	}
 
-	props := []string{"summary.config.sslThumbprint", "config.virtualNicManagerInfo.netConfig"}
+	props := []string{
+		"name",
+		"runtime.connectionState",
+		"summary.config.sslThumbprint",
+		"config.virtualNicManagerInfo.netConfig",
+	}
 
 	var host mo.HostSystem
 	err = c.RetrieveOne(ctx, *vm.Runtime.Host, props, &host)
@@ -169,26 +173,38 @@ func (m FileManager) TransferURL(ctx context.Context, u string) (*url.URL, error
 		return nil, err
 	}
 
-	kind := string(types.HostVirtualNicManagerNicTypeManagement)
+	if host.Config == nil {
+		return nil, fmt.Errorf("guest TransferURL failed for vm %q (%s): host %q (%s) config==nil, connectionState==%s",
+			vm.Name, vm.Self,
+			host.Name, host.Self, host.Runtime.ConnectionState)
+	}
 
 	// prefer an ESX management IP, as the hostname used when adding to VC may not be valid for this client
+	// See also object.HostSystem.ManagementIPs which we can't use here due to import cycle
 	for _, nc := range host.Config.VirtualNicManagerInfo.NetConfig {
-		if len(nc.CandidateVnic) > 0 && nc.NicType == kind {
-			ip := net.ParseIP(nc.CandidateVnic[0].Spec.Ip.IpAddress)
-			if ip != nil {
-				mname = ip.String()
-				m.mu.Lock()
-				m.hosts[name] = mname
-				m.mu.Unlock()
-				name = mname
-				break
+		if nc.NicType != string(types.HostVirtualNicManagerNicTypeManagement) {
+			continue
+		}
+		for ix := range nc.CandidateVnic {
+			for _, selectedVnicKey := range nc.SelectedVnic {
+				if nc.CandidateVnic[ix].Key != selectedVnicKey {
+					continue
+				}
+				ip := net.ParseIP(nc.CandidateVnic[ix].Spec.Ip.IpAddress)
+				if ip != nil {
+					mname = ip.String()
+					m.mu.Lock()
+					m.hosts[name] = mname
+					m.mu.Unlock()
+
+					name = mname
+					break
+				}
 			}
 		}
 	}
 
-	if needsHostname {
-		turl.Host = net.JoinHostPort(name, port)
-	}
+	turl.Host = net.JoinHostPort(name, port)
 
 	m.c.SetThumbprint(turl.Host, host.Summary.Config.SslThumbprint)
 

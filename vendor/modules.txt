@@ -168,15 +168,17 @@ github.com/urfave/cli
 # github.com/vmware/govcloudair v0.0.2
 github.com/vmware/govcloudair
 github.com/vmware/govcloudair/types/v56
-# github.com/vmware/govmomi v0.21.0
+# github.com/vmware/govmomi v0.23.2-0.20201015053813-cd11c0805183
 github.com/vmware/govmomi
 github.com/vmware/govmomi/find
 github.com/vmware/govmomi/guest
+github.com/vmware/govmomi/internal
 github.com/vmware/govmomi/list
 github.com/vmware/govmomi/nfc
 github.com/vmware/govmomi/object
 github.com/vmware/govmomi/property
 github.com/vmware/govmomi/session
+github.com/vmware/govmomi/session/keepalive
 github.com/vmware/govmomi/task
 github.com/vmware/govmomi/vapi/internal
 github.com/vmware/govmomi/vapi/library
