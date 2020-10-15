@@ -17,6 +17,7 @@ import (
 	"github.com/vmware/govmomi/vapi/library"
 	"github.com/vmware/govmomi/vapi/rest"
 	"github.com/vmware/govmomi/vim25"
+	"github.com/vmware/govmomi/vim25/debug"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
@@ -239,6 +240,9 @@ func (d *Driver) getCtx() context.Context {
 
 func (d *Driver) getSoapClient() (*govmomi.Client, error) {
 	if d.soap == nil {
+		if os.Getenv("MACHINE_DEBUG") != "" {
+			debug.SetProvider(&debug.LogProvider{})
+		}
 		c, err := d.soapLogin()
 		if err != nil {
 			return nil, err

@@ -63,14 +63,16 @@ Options:
 `
 
 func setDebugOutputLevel() {
-	// TODO: I'm not really a fan of this method and really would rather
-	// use -v / --verbose TBQH
+	// check -D, --debug and -debug, if set force debug and env var
 	for _, f := range os.Args {
 		if f == "-D" || f == "--debug" || f == "-debug" {
+			os.Setenv("MACHINE_DEBUG", "1")
 			log.SetDebug(true)
+			return
 		}
 	}
 
+	// check env
 	debugEnv := os.Getenv("MACHINE_DEBUG")
 	if debugEnv != "" {
 		showDebug, err := strconv.ParseBool(debugEnv)
